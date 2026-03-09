@@ -147,6 +147,7 @@ public sealed class LinuxBleChannel : IBleChannel
         await File.WriteAllTextAsync(path, json);
     }
 
+    /// <summary>Stops notifications on the RX characteristic and releases the BLE subscription.</summary>
     public async ValueTask DisposeAsync()
     {
         if (_rxChar != null)

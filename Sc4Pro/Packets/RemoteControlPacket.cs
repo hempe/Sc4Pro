@@ -1,7 +1,14 @@
 namespace Sc4Pro.Packets;
 
+/// <summary>
+/// Hardware remote-control button press (cmd 0x78).
+/// The remote has buttons for mode, unit, loft angle, target distance, and five club presets.
+/// </summary>
+/// <param name="Button">Raw button identifier sent by the device.</param>
+/// <param name="Raw">Hex-encoded raw bytes.</param>
 public record RemoteControlPacket(uint Button, string Raw) : Sc4ProPacket(0x78, Raw)
 {
+    /// <summary>Human-readable name for the button (e.g. "Club_W1_Driver", "Mode").</summary>
     public string ButtonName => Button switch
     {
         1 => "Mode",

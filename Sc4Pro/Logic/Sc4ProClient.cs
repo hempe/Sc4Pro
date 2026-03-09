@@ -80,14 +80,17 @@ public sealed class Sc4ProClient : IAsyncDisposable
             await SetDeviceSetting1Async(DS1Flags.Mode, mode: 0);
     }
 
+    /// <summary>Sends a DeviceSetting1 command with the given flags and field values, and awaits the ack.</summary>
     public Task<DeviceSetting1Ack> SetDeviceSetting1Async(
         DS1Flags flags, byte mode = 0, ClubType club = ClubType.W1) =>
         SendAndWaitAsync<DeviceSetting1Ack>(PacketBuilder.DeviceSetting1(flags, mode, club));
 
+    /// <summary>Sends a DeviceSetting2 command with the given flags and field values, and awaits the ack.</summary>
     public Task<DeviceSetting2Ack> SetDeviceSetting2Async(
         DS2Flags flags, byte volume = 0, byte appIndex = 0, byte appIndexOnOff = 0) =>
         SendAndWaitAsync<DeviceSetting2Ack>(PacketBuilder.DeviceSetting2(flags, volume, appIndex, appIndexOnOff));
 
+    /// <summary>Sends an EqSetting command and awaits the ack.</summary>
     public Task<EqSettingAck> SetEqAsync() =>
         SendAndWaitAsync<EqSettingAck>(PacketBuilder.EqSetting());
 
@@ -125,5 +128,6 @@ public sealed class Sc4ProClient : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>Disposes the underlying BLE channel.</summary>
     public ValueTask DisposeAsync() => _ble.DisposeAsync();
 }

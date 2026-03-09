@@ -24,11 +24,17 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Public properties (populated by ConnectAsync) ─────────────────────────
 
+    /// <summary>Bluetooth device name (from the BLE advertisement).</summary>
     public string DeviceName { get; private set; } = "";
+    /// <summary>Device serial number, populated from the Sync ack (e.g. "SC40B250038-03").</summary>
     public string Serial { get; private set; } = "";
+    /// <summary>Manufacturer name read from GATT characteristic 0x2A29.</summary>
     public string Manufacturer { get; private set; } = "";
+    /// <summary>Model number read from GATT characteristic 0x2A24.</summary>
     public string Model { get; private set; } = "";
+    /// <summary>Firmware revision read from GATT characteristic 0x2A26.</summary>
     public string FirmwareRevision { get; private set; } = "";
+    /// <summary>Hardware revision read from GATT characteristic 0x2A27.</summary>
     public string HardwareRevision { get; private set; } = "";
 
     /// <summary>Battery level in percent (0–100), or -1 if not available.</summary>
@@ -53,6 +59,7 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Connect ───────────────────────────────────────────────────────────────
 
+    /// <summary>Scans for the device, connects, reads GATT config characteristics, and runs the handshake.</summary>
     public async Task ConnectAsync()
     {
         _client = new Sc4ProClient(_ble);
@@ -99,12 +106,15 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Convenience wrappers ──────────────────────────────────────────────────
 
+    /// <summary>Selects a club and re-arms the device for the next shot.</summary>
     public Task<DeviceSetting1Ack> SetClubAsync(ClubType club)
         => Client.SetClubAsync(club);
 
+    /// <summary>Switches between normal (<see langword="false"/>) and swing-speed (<see langword="true"/>) mode.</summary>
     public Task SetModeAsync(bool swingSpeed)
         => Client.SetModeAsync(swingSpeed);
 
+    /// <summary>Arms the device for the next shot.</summary>
     public Task<ShotReadyAck> ShotReadyAsync()
         => Client.ShotReadyAsync();
 
@@ -113,6 +123,7 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Logging ───────────────────────────────────────────────────────────────
 
+    /// <summary>Prints all device settings and identity fields to stdout.</summary>
     public void LogSettings()
     {
         Console.WriteLine($"  Device name  : {DeviceName}");
@@ -129,5 +140,6 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Dispose ───────────────────────────────────────────────────────────────
 
+    /// <summary>Disposes the underlying BLE channel.</summary>
     public ValueTask DisposeAsync() => _ble.DisposeAsync();
 }

@@ -1,5 +1,9 @@
 namespace Sc4Pro.Bluetooth;
 
+/// <summary>
+/// Abstraction over a BLE transport. Implementations handle scanning, connecting,
+/// sending raw packets, and firing notifications received from the device.
+/// </summary>
 public interface IBleChannel : IAsyncDisposable
 {
     /// <summary>Fired for every raw notification received from the device.</summary>

@@ -2,8 +2,13 @@ using Sc4Pro.Packets;
 
 namespace Sc4Pro.Protocol;
 
+/// <summary>Parses raw BLE notification bytes into typed <see cref="Sc4ProPacket"/> instances.</summary>
 public static class PacketParser
 {
+    /// <summary>
+    /// Parses a raw BLE notification into the appropriate typed packet.
+    /// Returns <see cref="UnknownPacket"/> for unrecognized command bytes.
+    /// </summary>
     public static Sc4ProPacket Parse(byte[] d)
     {
         var raw = BitConverter.ToString(d).Replace("-", ":");

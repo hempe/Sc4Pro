@@ -2,11 +2,17 @@ using Sc4Pro.Packets;
 
 namespace Sc4Pro.Protocol;
 
+/// <summary>
+/// Builds outgoing command packets for the SC4Pro protocol.
+/// All packets are exactly 20 bytes: <c>[0x53][cmd][16 content bytes][0x45][checksum]</c>.
+/// Checksum = <c>(-sum of bytes 0–18) &amp; 0xFF</c>.
+/// </summary>
 public static class PacketBuilder
 {
-    // All SC4Pro command packets: 20 bytes
-    // Layout: [0x53][cmd][16 content bytes][0x45][checksum]
-
+    /// <summary>
+    /// Builds a Sync packet encoding the given time (defaults to <see cref="DateTime.Now"/>).
+    /// The device responds with a <see cref="Sc4Pro.Packets.SyncAck"/> containing its serial number.
+    /// </summary>
     public static byte[] Sync(DateTime? time = null)
     {
         var now = time ?? DateTime.Now;
@@ -20,8 +26,10 @@ public static class PacketBuilder
         return Build(0x74, content);
     }
 
+    /// <summary>Builds a ShotReady packet that arms the device for the next shot.</summary>
     public static byte[] ShotReady() => Build(0x77, new byte[16]);
 
+    /// <summary>Builds an EqSetting packet (all-zero content; sent as part of the connection handshake).</summary>
     public static byte[] EqSetting() => Build(0x76, new byte[16]);
 
     /// <summary>
