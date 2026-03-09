@@ -9,7 +9,7 @@ namespace Sc4Pro.Bluetooth;
 /// Linux/BlueZ implementation of <see cref="IBleChannel"/>.
 /// Scans, connects, and exposes raw byte send/receive via BlueZ D-Bus.
 /// </summary>
-public sealed class LinuxBleChannel : IBleChannel
+public sealed class BleChannel : IBleChannel
 {
     private readonly Dictionary<string, object> _writeOpts = new() { ["type"] = "command" };
     private GattCharacteristic? _txChar;

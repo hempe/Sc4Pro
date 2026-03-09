@@ -22,7 +22,7 @@ static class Analyzer
 
     public static async Task RunAsync()
     {
-        var bleChannel = new LinuxBleChannel();
+        var bleChannel = new BleChannel();
         await using var sc4pro = new Sc4ProClient(bleChannel);
 
         sc4pro.PacketReceived += pkt =>

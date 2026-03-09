@@ -54,7 +54,7 @@ public sealed class Sc4ProDevice : IAsyncDisposable
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
-    private readonly LinuxBleChannel _ble = new();
+    private readonly BleChannel _ble = new();
     private Sc4ProClient? _client;
 
     // ── Connect ───────────────────────────────────────────────────────────────
