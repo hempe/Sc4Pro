@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Shinobi.Sc4Pro.Bluetooth/Shinobi.Sc4Pro.Bluetooth.csproj" />
+    <ProjectReference Include="../Shinobi.Sc4Pro.Protocol/Shinobi.Sc4Pro.Protocol.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <JavaSdkDirectory>$(JAVA_HOME)</JavaSdkDirectory>
+    <AndroidSdkDirectory>$(ANDROID_HOME)</AndroidSdkDirectory>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Authors>Hansueli Burri</Authors>
+    <Company>Hansueli Burri</Company>
+    <Copyright>Hansueli Burri</Copyright>
+    <PackageIcon>icon.png</PackageIcon>
+    <RepositoryUrl>https://github.com/hempe/Shinobi.Sc4Pro</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/hempe/Shinobi.Sc4Pro</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\icon.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+    <None Include="..\LICENCE.md">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+</Project>
