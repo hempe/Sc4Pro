@@ -4,7 +4,7 @@ using Shinobi.Sc4Pro.Packets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Shinobi.Sc4Pro.Analysis;
+namespace Shinobi.Sc4Pro.Analyze;
 
 /// <summary>
 /// Replays the exact GATT sequence captured from the original SC4Pro app

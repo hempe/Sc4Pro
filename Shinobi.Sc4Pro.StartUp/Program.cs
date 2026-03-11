@@ -28,6 +28,7 @@ var jsonOptions = new JsonSerializerOptions
 {
     WriteIndented = false,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    PropertyNameCaseInsensitive = true,
     Converters = { new JsonStringEnumConverter() },
 };
 
@@ -85,26 +86,22 @@ var server = WebSocketServerBuilder.Create()
     .OnTextMessage(async (ws, msg, ct) =>
     {
         if (device == null) return;
+        logger.LogDebug("WS ← {Msg}", msg);
         try
         {
-            using var doc = JsonDocument.Parse(msg);
-            var type = doc.RootElement.GetProperty("type").GetString();
-            switch (type)
+            switch (JsonSerializer.Deserialize<WsCommand>(msg, jsonOptions))
             {
-                case "setClub":
-                    var clubStr = doc.RootElement.GetProperty("club").GetString()!;
-                    var club = Enum.Parse<ClubType>(clubStr);
+                case SetClubCommand { Club: var club }:
                     await device.SetClubAsync(club);
-                    Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setClub", club = clubStr }, jsonOptions));
+                    Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setClub", club }, jsonOptions));
                     break;
 
-                case "setMode":
-                    var swingSpeed = doc.RootElement.GetProperty("swingSpeed").GetBoolean();
-                    await device.SetModeAsync(swingSpeed);
-                    Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setMode", swingSpeed }, jsonOptions));
+                case SetModeCommand { Mode: var mode }:
+                    await device.SetModeAsync(mode);
+                    Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setMode", mode }, jsonOptions));
                     break;
 
-                case "shotReady":
+                case ShotReadyCommand:
                     await device.ShotReadyAsync();
                     Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "shotReady" }, jsonOptions));
                     break;

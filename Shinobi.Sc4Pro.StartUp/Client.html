@@ -245,8 +245,9 @@
   <div id="controls">
     <div class="section-label">Mode</div>
     <div id="mode-row">
-      <button class="mode-btn active" id="btn-normal" onclick="setMode(false)">Normal</button>
-      <button class="mode-btn" id="btn-swing" onclick="setMode(true)">Swing Speed</button>
+      <button class="mode-btn active" id="btn-normal" onclick="setMode('Practice')">Normal</button>
+      <button class="mode-btn" id="btn-swing" onclick="setMode('SwingSpeed')">Swing Speed</button>
+      <button class="mode-btn" id="btn-sim" onclick="setMode('Sim')">Sim</button>
     </div>
 
     <div class="section-label">Club</div>
@@ -263,7 +264,7 @@
   <script>
     const CLUBS = ['W1', 'W3', 'W4', 'W5', 'W6', 'W7', 'U3', 'U4', 'U5', 'U6', 'U7', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'PW', 'GW', 'SW', 'LW', 'PT'];
 
-    let ws, activeClub = null, swingSpeedMode = false;
+    let ws, activeClub = null;
 
     // Build club grid
     const grid = document.getElementById('club-grid');
@@ -328,7 +329,7 @@
 
         case 'ack':
           if (msg.command === 'setClub') setActiveClub(msg.club);
-          if (msg.command === 'setMode') setActiveMode(msg.swingSpeed);
+          if (msg.command === 'setMode') setActiveMode(msg.mode);
           logEntry('ack', JSON.stringify(msg, null, 2));
           break;
       }
@@ -357,9 +358,9 @@
 
     function setClub(club) { send({ type: 'setClub', club }); }
 
-    function setMode(isSwing) {
-      send({ type: 'setMode', swingSpeed: isSwing });
-      setActiveMode(isSwing);
+    function setMode(mode) {
+      send({ type: 'setMode', mode });
+      setActiveMode(mode);
     }
 
     function shotReady() { send({ type: 'shotReady' }); }
@@ -374,10 +375,10 @@
       if (btn) btn.classList.add('active');
     }
 
-    function setActiveMode(isSwing) {
-      swingSpeedMode = isSwing;
-      document.getElementById('btn-normal').classList.toggle('active', !isSwing);
-      document.getElementById('btn-swing').classList.toggle('active', isSwing);
+    function setActiveMode(mode) {
+      document.getElementById('btn-normal').classList.toggle('active', mode === 'Practice');
+      document.getElementById('btn-swing').classList.toggle('active', mode === 'SwingSpeed');
+      document.getElementById('btn-sim').classList.toggle('active', mode === 'Sim');
     }
 
     connect();

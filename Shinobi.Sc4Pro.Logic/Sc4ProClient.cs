@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Shinobi.Sc4Pro.Bluetooth;
 using Shinobi.Sc4Pro.Packets;
 using Shinobi.Sc4Pro.Protocol;
@@ -16,9 +17,14 @@ public sealed class Sc4ProClient : IAsyncDisposable
     private const string RxUuid = "50340003-2065-6964-6461-63676e697773"; // device notifies here
 
     private readonly IBleChannel _ble;
+    private readonly ILogger? _logger;
     private readonly ConcurrentDictionary<byte, TaskCompletionSource<Sc4ProPacket>> _pending = new();
 
-    public Sc4ProClient(IBleChannel ble) => _ble = ble;
+    public Sc4ProClient(IBleChannel ble, ILogger? logger = null)
+    {
+        _ble = ble;
+        _logger = logger;
+    }
 
     /// <summary>Fired for every unsolicited packet (shots, remote-control button presses).</summary>
     public event Func<Sc4ProPacket, Task>? PacketReceived;
@@ -66,55 +72,38 @@ public sealed class Sc4ProClient : IAsyncDisposable
         return ack;
     }
 
-    /// <summary>Switches between normal (false) and swing-speed (true) mode.</summary>
+    /// <summary>Switches the device operating mode.</summary>
     /// <remarks>
-    /// Swing speed = DS2(appIndex=2) only — no DS1 needed.
-    /// Normal mode = DS2(appIndex=1) + DS1(mode=0).
+    /// Practice   = DS2(appIndex=1) + DS1(mode=0)                           — device shows practice screen<br/>
+    /// SwingSpeed = DS2(appIndex=1) + DS1(mode=2) + ShotReady                — device shows "SWG"<br/>
+    /// Sim        = DS1(mode=0) + DS2(appIndex=2)                            — device shows "SIM"<br/>
+    /// (confirmed from Analysis.cs click sequence; "Click 2 back to home" = SwingSpeed, "Click 3 driving range" = Sim)
     /// </remarks>
-    public async Task SetModeAsync(bool swingSpeed)
+    public async Task SetModeAsync(DeviceMode mode)
     {
-#warning tSetModeAsync has to little options see code and commented code below.
-
-        if (!swingSpeed)
+        switch (mode)
         {
-            // This sets it to practice mode
-            await SetDeviceSetting2Async(
-                DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
-                appIndex: 1,
-                appIndexOnOff: 1);
+            case DeviceMode.Practice:
+                await SetDeviceSetting2Async(
+                    DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
+                    appIndex: 1, appIndexOnOff: 1);
+                await SetDeviceSetting1Async(DS1Flags.Mode, mode: 0);
+                break;
 
-            await SetDeviceSetting1Async(DS1Flags.Mode, mode: 0);
+            case DeviceMode.SwingSpeed:
+                await SetDeviceSetting2Async(
+                    DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
+                    appIndex: 1, appIndexOnOff: 1);
+                await SetDeviceSetting1Async(DS1Flags.Mode, mode: 2);
+                await ShotReadyAsync();
+                break;
 
-            /*
-            // This sets it to SIM (Simulator mode?)
-            await SetDeviceSetting2Async(
-                DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
-                appIndex: 2,
-                appIndexOnOff: 1);
-
-            await SetDeviceSetting1Async(DS1Flags.Mode, mode: 0);
-            */
-        }
-        else
-        {
-            // This sets it to swing mode:
-            await SetDeviceSetting2Async(
-            DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
-                appIndex: 0,
-                appIndexOnOff: 1);
-
-            await SetDeviceSetting1Async(DS1Flags.Mode, mode: 2);
-
-
-            /*
-            // This sets it to target mode.
-            await SetDeviceSetting2Async(
-            DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
-                appIndex: 0,
-                appIndexOnOff: 1);
-
-            await SetDeviceSetting1Async(DS1Flags.Mode, mode: 1);
-            */
+            case DeviceMode.Sim:
+                await SetDeviceSetting1Async(DS1Flags.Mode, mode: 0);
+                await SetDeviceSetting2Async(
+                    DS2Flags.AppIndex | DS2Flags.AppIndexOnOff,
+                    appIndex: 2, appIndexOnOff: 1);
+                break;
         }
     }
 
@@ -138,18 +127,23 @@ public sealed class Sc4ProClient : IAsyncDisposable
         where T : Sc4ProPacket
     {
         byte cmd = packet[1];
+        _logger?.LogDebug("BLE tx cmd=0x{Cmd:x2} {Hex}", cmd, Hex(packet));
         var tcs = new TaskCompletionSource<Sc4ProPacket>();
         _pending[cmd] = tcs;
         try
         {
             await _ble.SendAsync(packet);
-            return (T)await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(5));
+            var ack = (T)await tcs.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(5));
+            _logger?.LogDebug("BLE rx cmd=0x{Cmd:x2} {Raw}", cmd, ack.Raw);
+            return ack;
         }
         finally
         {
             _pending.TryRemove(cmd, out _);
         }
     }
+
+    private static string Hex(byte[] b) => BitConverter.ToString(b).Replace("-", " ").ToLowerInvariant();
 
     // ── Incoming packet router ─────────────────────────────────────────────────
 
@@ -161,7 +155,10 @@ public sealed class Sc4ProClient : IAsyncDisposable
         if (_pending.TryRemove(pkt.Cmd, out var tcs))
             tcs.TrySetResult(pkt);
         else
+        {
+            _logger?.LogDebug("BLE rx unsolicited cmd=0x{Cmd:x2} {Hex}", pkt.Cmd, Hex(data));
             PacketReceived?.Invoke(pkt);
+        }
 
         return Task.CompletedTask;
     }
