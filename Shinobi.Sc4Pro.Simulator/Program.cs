@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 using Shinobi.Sc4Pro.Packets;
+using Shinobi.Sc4Pro.Protocol;
 using Shinobi.WebSockets;
 using Shinobi.WebSockets.Builders;
 using Shinobi.WebSockets.Extensions;
@@ -13,6 +14,7 @@ using Shinobi.WebSockets.Http;
 
 var assembly = Assembly.GetExecutingAssembly();
 var clients = new ConcurrentDictionary<Guid, ShinobiWebSocket>();
+ShinobiWebSocket? bleWs = null;
 
 var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddConsole());
 var logger = loggerFactory.CreateLogger("Simulator");
@@ -25,14 +27,114 @@ var jsonOptions = new JsonSerializerOptions
     Converters = { new JsonStringEnumConverter() },
 };
 
-// ── Simulated device state ────────────────────────────────────────────────────
-
 var state = new SimState();
 
 void Broadcast(string json)
 {
     foreach (var (_, ws) in clients)
         _ = ws.SendTextAsync(json, CancellationToken.None);
+}
+
+// ── BLE path handler ──────────────────────────────────────────────────────────
+
+async Task HandleBleAsync(ShinobiWebSocket ws, string msg, CancellationToken ct)
+{
+    using var doc = JsonDocument.Parse(msg);
+    if (doc.RootElement.GetProperty("type").GetString() != "tx") return;
+
+    var d = Convert.FromBase64String(doc.RootElement.GetProperty("data").GetString()!);
+    if (d.Length < 2) return;
+
+    byte cmd = d[1];
+    byte[] ack;
+
+    switch (cmd)
+    {
+        case 0x74: // Sync — respond with fake serial
+            ack = AckBuilder.SyncAck("SC4ProSim-01");
+            break;
+
+        case 0x6F: // DS1 — parse club and mode
+            if ((d[2] & (byte)DS1Flags.Club) != 0)
+                state.Club = (ClubType)d[15];
+            state.LastMode = d[4];
+            state.UpdateDeviceMode();
+            Broadcast(JsonSerializer.Serialize(state.ToStatusMsg(), jsonOptions));
+            ack = AckBuilder.Ack(cmd);
+            break;
+
+        case 0x6E: // DS2 — parse appIndex
+            state.LastAppIndex = d[13];
+            state.UpdateDeviceMode();
+            Broadcast(JsonSerializer.Serialize(state.ToStatusMsg(), jsonOptions));
+            ack = AckBuilder.Ack(cmd);
+            break;
+
+        case 0x77: // ShotReady — arm device
+            state.Armed = true;
+            Broadcast(JsonSerializer.Serialize(state.ToStatusMsg(), jsonOptions));
+            ack = AckBuilder.Ack(cmd);
+            break;
+
+        default:
+            ack = AckBuilder.Ack(cmd);
+            break;
+    }
+
+    var response = JsonSerializer.Serialize(new { type = "rx", data = Convert.ToBase64String(ack) });
+    await ws.SendTextAsync(response, ct);
+}
+
+// ── UI path handler ───────────────────────────────────────────────────────────
+
+async Task HandleUiAsync(ShinobiWebSocket ws, string msg, CancellationToken ct)
+{
+    logger.LogDebug("UI ← {Msg}", msg);
+    using var doc = JsonDocument.Parse(msg);
+    var type = doc.RootElement.GetProperty("type").GetString();
+
+    switch (type)
+    {
+        case "setClub":
+            state.Club = doc.RootElement.GetProperty("club").Deserialize<ClubType>(jsonOptions);
+            Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setClub", state.Club, loftAngle = state.LoftAngle }, jsonOptions));
+            break;
+
+        case "setMode":
+            state.Mode = doc.RootElement.GetProperty("mode").Deserialize<DeviceMode>(jsonOptions);
+            Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setMode", state.Mode }, jsonOptions));
+            break;
+
+        case "shotReady":
+            state.Armed = true;
+            Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "shotReady" }, jsonOptions));
+            break;
+
+        case "injectShot":
+            var shot = doc.RootElement.Deserialize<ShotState>(jsonOptions);
+            if (shot != null)
+            {
+                state.Shot = shot;
+                state.ShotCount++;
+                state.Armed = false;
+                Broadcast(JsonSerializer.Serialize(new { type = "shot", state.ShotCount, shot }, jsonOptions));
+            }
+            break;
+
+        case "remoteButton":
+            var button = doc.RootElement.GetProperty("button").GetUInt32();
+            state.HandleRemoteButton(button);
+            Broadcast(JsonSerializer.Serialize(new
+            {
+                type = "remoteButton",
+                button,
+                state.Club,
+                loftAngle = state.LoftAngle,
+                state.TargetDistance,
+            }, jsonOptions));
+            break;
+    }
+    await Task.CompletedTask;
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
@@ -48,63 +150,27 @@ var server = WebSocketServerBuilder.Create()
     })
     .OnConnect(async (ws, next, ct) =>
     {
-        clients[ws.Context.Guid] = ws;
-        await ws.SendTextAsync(JsonSerializer.Serialize(state.ToStatusMsg(), jsonOptions), ct);
+        if (ws.Context.Path == "/ble")
+            bleWs = ws;
+        else
+        {
+            clients[ws.Context.Guid] = ws;
+            await ws.SendTextAsync(JsonSerializer.Serialize(state.ToStatusMsg(), jsonOptions), ct);
+        }
         await next(ws, ct);
     })
     .OnClose((ws, status, desc, next, ct) =>
     {
+        if (ws == bleWs) bleWs = null;
         clients.TryRemove(ws.Context.Guid, out _);
         return next(ws, status, desc, ct);
     })
     .OnTextMessage(async (ws, msg, ct) =>
     {
-        logger.LogDebug("WS ← {Msg}", msg);
-        using var doc = JsonDocument.Parse(msg);
-        var type = doc.RootElement.GetProperty("type").GetString();
-
-        switch (type)
-        {
-            case "setClub":
-                state.Club = doc.RootElement.GetProperty("club").Deserialize<ClubType>(jsonOptions);
-                Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setClub", state.Club, loftAngle = state.LoftAngle }, jsonOptions));
-                break;
-
-            case "setMode":
-                state.Mode = doc.RootElement.GetProperty("mode").Deserialize<DeviceMode>(jsonOptions);
-                Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "setMode", state.Mode }, jsonOptions));
-                break;
-
-            case "shotReady":
-                state.Armed = true;
-                Broadcast(JsonSerializer.Serialize(new { type = "ack", command = "shotReady" }, jsonOptions));
-                break;
-
-            case "injectShot":
-                var shot = doc.RootElement.Deserialize<ShotState>(jsonOptions);
-                if (shot != null)
-                {
-                    state.Shot = shot;
-                    state.ShotCount++;
-                    state.Armed = false;
-                    Broadcast(JsonSerializer.Serialize(new { type = "shot", state.ShotCount, shot }, jsonOptions));
-                }
-                break;
-
-            case "remoteButton":
-                var button = doc.RootElement.GetProperty("button").GetUInt32();
-                state.HandleRemoteButton(button);
-                Broadcast(JsonSerializer.Serialize(new
-                {
-                    type = "remoteButton",
-                    button,
-                    state.Club,
-                    loftAngle = state.LoftAngle,
-                    state.TargetDistance,
-                }, jsonOptions));
-                break;
-        }
-        await Task.CompletedTask;
+        if (ws == bleWs)
+            await HandleBleAsync(ws, msg, ct);
+        else
+            await HandleUiAsync(ws, msg, ct);
     })
     .Build();
 
@@ -113,7 +179,7 @@ logger.LogInformation("Simulator running at http://localhost:8081");
 Console.ReadLine();
 await server.StopAsync();
 
-// ── State types ───────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 
 class SimState
 {
@@ -127,7 +193,7 @@ class SimState
         [ClubType.SW]=56f,[ClubType.LW]=60f,[ClubType.PT]=3f,
     };
 
-    private static readonly ClubType[] _woods    = [ClubType.W3, ClubType.W4, ClubType.W5, ClubType.W6, ClubType.W7];
+    private static readonly ClubType[] _woods     = [ClubType.W3, ClubType.W4, ClubType.W5, ClubType.W6, ClubType.W7];
     private static readonly ClubType[] _utilities = [ClubType.U3, ClubType.U4, ClubType.U5, ClubType.U6, ClubType.U7];
     private static readonly ClubType[] _irons     = [ClubType.I3, ClubType.I4, ClubType.I5, ClubType.I6, ClubType.I7, ClubType.I8, ClubType.I9];
     private static readonly ClubType[] _wedges    = [ClubType.PW, ClubType.GW, ClubType.SW, ClubType.LW];
@@ -139,19 +205,30 @@ class SimState
     public ShotState? Shot { get; set; }
     public int TargetDistance { get; set; }
 
+    // Raw values from BLE commands, used to derive Mode
+    public byte LastMode { get; set; } = 0;
+    public byte LastAppIndex { get; set; } = 1;
+
     private readonly Dictionary<ClubType, float> _loftOverrides = new();
 
     public float LoftAngle => _loftOverrides.TryGetValue(Club, out var v) ? v
         : _defaultLoft.TryGetValue(Club, out var d) ? d : 0f;
 
+    public void UpdateDeviceMode()
+    {
+        Mode = LastAppIndex == 2 ? DeviceMode.Sim
+            : LastMode == 2     ? DeviceMode.SwingSpeed
+            :                     DeviceMode.Practice;
+    }
+
     public void HandleRemoteButton(uint button)
     {
         switch (button)
         {
-            case 6: _loftOverrides[Club] = LoftAngle + 0.5f; break;
-            case 7: _loftOverrides[Club] = LoftAngle - 0.5f; break;
-            case 8: TargetDistance++; break;
-            case 9: TargetDistance--; break;
+            case 6:  _loftOverrides[Club] = LoftAngle + 0.5f; break;
+            case 7:  _loftOverrides[Club] = LoftAngle - 0.5f; break;
+            case 8:  TargetDistance++; break;
+            case 9:  TargetDistance--; break;
             case 10: Club = ClubType.W1; break;
             case 11: Club = Cycle(_woods); break;
             case 12: Club = Cycle(_utilities); break;

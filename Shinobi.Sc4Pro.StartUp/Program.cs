@@ -124,7 +124,7 @@ _ = Task.Run(async () =>
         currentState = "scanning";
         Broadcast(JsonSerializer.Serialize(new { type = "status", state = "scanning" }, jsonOptions));
 
-        device = new Sc4ProDevice(new BleChannel(), loggerFactory.CreateLogger<Sc4ProDevice>());
+        device = new Sc4ProDevice(new SimBleChannel(), loggerFactory.CreateLogger<Sc4ProDevice>());
 
         device.PacketReceived += pkt =>
         {

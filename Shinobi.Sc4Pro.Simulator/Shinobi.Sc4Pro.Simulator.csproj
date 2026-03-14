@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Shinobi.Sc4Pro.Packets/Shinobi.Sc4Pro.Packets.csproj" />
+    <ProjectReference Include="../Shinobi.Sc4Pro.Bluetooth/Shinobi.Sc4Pro.Bluetooth.csproj" />
+    <ProjectReference Include="../Shinobi.Sc4Pro.Protocol/Shinobi.Sc4Pro.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Shinobi.WebSockets" Version="1.0.25" />
