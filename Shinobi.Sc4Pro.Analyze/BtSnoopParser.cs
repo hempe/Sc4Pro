@@ -158,21 +158,20 @@ static class BtSnoopParser
                 obj["type"] = fromDevice ? "ShotReadyAck" : "ShotReady";
                 break;
 
-            case 0x73: // Shot / SwingSpeedAck
+            case 0x73: // Shot data (all packets exactly 20 bytes)
                 if (d.Length == 20)
                 {
-                    // 20-byte = shot timestamp (device confirms swing received)
-                    obj["type"] = "ShotTimestamp";
-                    if (d.Length >= 11)
-                        obj["deviceTime"] = $"{d[5] + 2000:0000}-{d[6]:00}-{d[7]:00} {d[8]:00}:{d[9]:00}:{d[10]:00}";
+                    var index = (uint)BitConverter.ToUInt16(d, 2);
+                    var seq   = d[4];
+                    var p     = d[5..^2]; // 13-byte payload
+                    obj["type"]  = fromDevice ? "ShotData" : "ShotDataRequest";
+                    obj["index"] = index;
+                    obj["seq"]   = seq;
+                    if (fromDevice)
+                        DecodeShotSeq(seq, p, obj);
                 }
                 else
-                {
-                    obj["type"] = "ShotData";
-                    obj["payloadHex"] = d.Length >= 2
-                        ? BitConverter.ToString(d, 2, d.Length - 4).Replace("-", ":").ToLowerInvariant()
-                        : null;
-                }
+                    obj["type"] = $"Unknown(0x73,len={d.Length})";
                 break;
 
             case 0x78: // RemoteControl
@@ -192,6 +191,48 @@ static class BtSnoopParser
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static void DecodeShotSeq(byte seq, byte[] p, JsonObject obj)
+    {
+        switch (seq)
+        {
+            case 1:
+                obj["shotTime"]   = $"{p[0] + 2000:0000}-{p[1]:00}-{p[2]:00} {p[3]:00}:{p[4]:00}:{p[5]:00}";
+                obj["unknown1"]   = p[6];
+                obj["club"]       = ((ClubType)p[7]).ToString();
+                obj["loftAngle"]  = BitConverter.ToSingle(p, 8);
+                obj["isMetric"]   = p[12] != 0;
+                break;
+            case 2:
+                obj["pressure_hPa"] = BitConverter.ToSingle(p, 0);
+                obj["temp_C"]       = BitConverter.ToSingle(p, 4);
+                obj["ballSpeed"]    = BitConverter.ToSingle(p, 8);
+                break;
+            case 3:
+                obj["clubSpeed"]    = BitConverter.ToSingle(p, 0);
+                obj["launchAngle"]  = BitConverter.ToSingle(p, 4);
+                obj["carry"]        = BitConverter.ToSingle(p, 8);
+                break;
+            case 4:
+                obj["totalDist"]    = BitConverter.ToSingle(p, 0);
+                obj["apex"]         = BitConverter.ToSingle(p, 4);
+                obj["totalSpin"]    = BitConverter.ToSingle(p, 8);
+                break;
+            case 5:
+                obj["launchDir"]    = BitConverter.ToSingle(p, 0);
+                obj["tilt"]         = BitConverter.ToSingle(p, 4);
+                obj["tailHex"]      = BitConverter.ToString(p, 8).Replace("-", ":").ToLowerInvariant();
+                break;
+            case 6:
+                obj["backSpin"]     = (uint)BitConverter.ToUInt16(p, 0);
+                obj["sideSpin"]     = BitConverter.ToInt16(p, 2);
+                obj["spinAxis"]     = BitConverter.ToInt16(p, 4);
+                obj["attackAngle"]  = BitConverter.ToInt16(p, 6);
+                obj["clubPath"]     = BitConverter.ToInt16(p, 8);
+                obj["tailHex"]      = BitConverter.ToString(p, 10).Replace("-", ":").ToLowerInvariant();
+                break;
+        }
+    }
 
     private static bool HasValidChecksum(byte[] d)
     {

@@ -7,7 +7,7 @@ namespace Shinobi.Sc4Pro.Packets;
 /// <param name="Hour">Shot timestamp — hour (0–23).</param>
 /// <param name="Min">Shot timestamp — minute (0–59).</param>
 /// <param name="Sec">Shot timestamp — second (0–59).</param>
-/// <param name="Unknown1">Four bytes at p[24–27], purpose not yet identified.</param>
+/// <param name="Unknown1">Single byte at p[6] (between Sec and Club); purpose not yet identified.</param>
 /// <param name="Club">Club selected at the time of the shot.</param>
 /// <param name="LoftAngle">Loft angle in degrees.</param>
 /// <param name="IsMetric">True when the device is configured for metric units.</param>

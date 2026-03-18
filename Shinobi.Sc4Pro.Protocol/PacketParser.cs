@@ -80,8 +80,7 @@ public static class PacketParser
                 BitConverter.ToSingle(p, 8)),
             5 => new ShotDirection(
                 BitConverter.ToSingle(p, 0),
-                BitConverter.ToSingle(p, 4),
-                0, 0, 0) { Tail = p[8..] },
+                BitConverter.ToSingle(p, 4)) { Tail = p[8..] },
             6 => new ShotSpinDetails(
                 (uint)BitConverter.ToUInt16(p, 0),
                 BitConverter.ToInt16(p, 2),
