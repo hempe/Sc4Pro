@@ -16,6 +16,14 @@ var assembly = Assembly.GetExecutingAssembly();
 var clients = new ConcurrentDictionary<Guid, ShinobiWebSocket>();
 ShinobiWebSocket? bleWs = null;
 
+// Load shot library (38 real shots extracted from btsnoop dump)
+using var shotsStream = assembly.GetManifestResourceStream("Shinobi.Sc4Pro.Simulator.shots.json")!;
+var shotLibrary = JsonSerializer.Deserialize<string[][]>(shotsStream)!
+    .Select(seqs => seqs.Select(hex =>
+        hex.Split(':').Select(b => Convert.ToByte(b, 16)).ToArray()
+    ).ToArray())
+    .ToArray();
+
 var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddConsole());
 var logger = loggerFactory.CreateLogger("Simulator");
 
@@ -76,6 +84,24 @@ async Task HandleBleAsync(ShinobiWebSocket ws, string msg, CancellationToken ct)
             ack = AckBuilder.Ack(cmd);
             break;
 
+        case 0x73: // ShotDataRequest — app acking a seq; reply with the next one
+            if (state.PendingShot != null)
+            {
+                var ackedSeq = d[4]; // seq the app just acked
+                if (ackedSeq < 6)
+                {
+                    var next = state.PendingShot[ackedSeq]; // ackedSeq=1 → index 1 = seq2
+                    await ws.SendTextAsync(
+                        JsonSerializer.Serialize(new { type = "rx", data = Convert.ToBase64String(next) }),
+                        ct);
+                }
+                else
+                {
+                    state.PendingShot = null;
+                }
+            }
+            return; // no generic ack
+
         default:
             ack = AckBuilder.Ack(cmd);
             break;
@@ -119,6 +145,20 @@ async Task HandleUiAsync(ShinobiWebSocket ws, string msg, CancellationToken ct)
                 state.Armed = false;
                 Broadcast(JsonSerializer.Serialize(new { type = "shot", state.ShotCount, shot }, jsonOptions));
             }
+            break;
+
+        case "simulateShot":
+            if (bleWs != null)
+            {
+                var pending = shotLibrary[Random.Shared.Next(shotLibrary.Length)];
+                state.PendingShot = pending;
+                await bleWs.SendTextAsync(
+                    JsonSerializer.Serialize(new { type = "rx", data = Convert.ToBase64String(pending[0]) }),
+                    ct);
+                logger.LogInformation("Simulating shot (seq1 sent)");
+            }
+            else
+                logger.LogWarning("simulateShot: no BLE client connected");
             break;
 
         case "remoteButton":
@@ -211,6 +251,7 @@ class SimState
     public int ShotCount { get; set; }
     public ShotState? Shot { get; set; }
     public int TargetDistance { get; set; }
+    public byte[][]? PendingShot { get; set; }
 
     // Raw values from BLE commands, used to derive Mode
     public byte LastMode { get; set; } = 0;

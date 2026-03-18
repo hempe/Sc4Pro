@@ -17,5 +17,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Simulator.html" />
+    <EmbeddedResource Include="shots.json" />
   </ItemGroup>
 </Project>

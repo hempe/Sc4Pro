@@ -394,6 +394,10 @@
       <div class="button" onclick="btn(13)">IRON</div>
       <div class="button" onclick="btn(14)">WEDGE</div>
       <div class="button" onclick="btn(0)">TOTAL/<br />CARRY</div>
+
+      <!-- Simulate shot -->
+      <div class="button" style="grid-column: span 3; background: #1a3a1a; border-color: #4a7a4a;"
+           onclick="simulateShot()">SIMULATE SHOT</div>
     </div>
 
   </div>
@@ -448,6 +452,7 @@
     }
 
     function btn(n) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'remoteButton', button: n })); }
+    function simulateShot() { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'simulateShot' })); }
 
     function fmt1(v) { return v == null ? '--.-' : v.toFixed(1); }
     function fmt0(v) { return v == null ? '----' : Math.round(v).toString(); }
